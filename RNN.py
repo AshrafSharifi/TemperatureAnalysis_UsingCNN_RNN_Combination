@@ -33,7 +33,7 @@ best_x_test = None
 best_y_train = None
 best_y_test = None
 best_scalers = None   
-train_for_specific_config = False 
+train_for_specific_config = True 
 with_out_process_time=False
 # Data preprocessing
 data_header = [
@@ -51,12 +51,10 @@ def localize_row(df_base,state,time_stamp):
     row= row[data_header]
     return row
     
-
 def sort_key(entry):
     timestamp_str = entry[3]  # Assuming timestamp is always at the 4th position
     timestamp_obj = datetime.strptime(timestamp_str, '%Y_%m_%d_%H_%M')
     return timestamp_obj
-
 
 def analyze_result_per_POIs(resul):   
     predicted_values = [item[1][0] for item in resul]
@@ -123,28 +121,18 @@ def plot_result_for_each_POI(actual_values,prediction_values,POI,result):
     plt.ylim(0, 35)
     plt.show()
     S=1
-
-
-
-
-
-    
-        
+ 
 def plot_result_for_each_month(actual_values,prediction_values,df):
     df=pd.DataFrame(df)
     unique_months = df[2].unique()
     for month in unique_months:
-        plt.figure(figsize=(12, 6))
-        
+        plt.figure(figsize=(12, 6))        
         # Filter data for the specific month
-     
         month_data = df[df.iloc[:, 2] == month]
-        month_indices = month_data.index.values
-        
+        month_indices = month_data.index.values        
         # Index the actual and prediction values using the month indices
         month_actual_values = actual_values[:, month_indices]
-        month_prediction_values = prediction_values[:, month_indices]
-    
+        month_prediction_values = prediction_values[:, month_indices]    
         plt.scatter(range(len(month_actual_values.flatten())), month_actual_values.flatten(), label='Actual Values', marker='o', alpha=0.7)
         plt.scatter(range(len(month_prediction_values.flatten())), month_prediction_values.flatten(), label='Predicted Values', marker='x', alpha=0.7)
         plt.plot(month_actual_values.flatten(), label='_nolegend_', linestyle='-', color='blue', alpha=0.5)
@@ -154,8 +142,7 @@ def plot_result_for_each_month(actual_values,prediction_values,df):
         plt.title(f'Actual vs Predicted Values - Month {int(month)}')
         plt.legend()
         plt.show()
-    
-    
+       
 def compute_metrics(predicted_values,actual_values):
     # Calculate loss, MSE, MAE, and MAPE
     loss = np.sum((predicted_values - actual_values) ** 2)
@@ -164,6 +151,7 @@ def compute_metrics(predicted_values,actual_values):
     mape = np.mean(np.abs((actual_values - predicted_values) / actual_values)) * 100
 
     # Print the results
+    print(f"==============Results===============")
     print(f"Loss: {loss}")
     print(f"MSE: {mse}")
     print(f"MAE: {mae}")
@@ -190,10 +178,6 @@ def create_model():
     model.compile(optimizer=custom_optimizer, loss='mean_absolute_percentage_error', metrics=['mape', 'mae', 'mse'])
     return model
     
-    
-
-
-
 
 DB_file = "data/DB/train_DB.csv"
 if normalize_flag:
@@ -237,9 +221,6 @@ if train_for_specific_config:
     learning_rate= 0.0001
 
 
-        
-        
-        
     # Load the data
     file = DB_file
     df = pd.read_csv(file)
@@ -251,28 +232,15 @@ if train_for_specific_config:
     scalers = {}
     if normalize_flag:
         columns_to_scale = ['temp_to_estimate','temp_centr']
-        
         for column in columns_to_scale:
             scaler = MinMaxScaler(feature_range=(0,1))
             df[column] = scaler.fit_transform(df[[column]])
             scalers[column] = scaler
         
-    
-    
-   
     data = df[data_header].values
     for i in range(len(data)):
         data[i][index] = data[i][index][len(data[i][index]) - 1]
-    
     data = np.asarray(data).astype(np.float32)
-    
-    
-    
-    
-        
-        
-    
-    
     x, y = create_sequences(data, len(data_header))
     
     # Reshape the data
@@ -283,8 +251,6 @@ if train_for_specific_config:
     # Split data into training and testing sets
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=23)
 
-
-
     # Build the model
     model = create_model()
     # model.summary()
@@ -293,10 +259,6 @@ if train_for_specific_config:
     # Train the model       
     history = model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, validation_split=validation_split,callbacks = [checkpointer,early_stopping])
     
-    
-
-
-
     # Visualize the training loss
     plt.plot(history.history['loss'], label='Training Loss')
     plt.plot(history.history['val_loss'], label='Validation Loss')
@@ -335,7 +297,7 @@ if train_for_specific_config:
     
     
 
-    root = 'data/Test_PrevMethod/'
+    root = 'data/Test/'
                 
                 
     with open(root+'x_test', 'wb') as fout:
@@ -543,9 +505,9 @@ else:
         else:
         # Load the trained model for testing
         
-            do_test=False
+            do_test=True
 
-            root = 'data/Test_CurrentMethod/'
+            root = 'data/Test/'
             
             
             if do_test:
@@ -612,7 +574,7 @@ else:
                     array_test_secondry=[]
                     for i in range(len(y_test)):
                         
-                        print(i)
+                        # print(i)
                         x_test_temp = x_test[i].copy()
                         x_test_temp=((x_test_temp[timesteps-1].reshape(-1, 1)).T)[0]
                         temp_points = all_points.copy()
@@ -674,7 +636,7 @@ else:
     
                 # actual_values = np.reshape(actual_values, (1,len(actual_values)))
                 # prediction_values = np.reshape(prediction_values, (1,len(prediction_values)))
-                # compute_metrics(prediction_values,actual_values)
+                compute_metrics(prediction_values,actual_values)
                 # plot_result_for_each_POI(actual_values,prediction_values,result)
                 analyze_result_per_POIs(result)
                 
