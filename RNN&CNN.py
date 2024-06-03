@@ -14,11 +14,11 @@ from tensorflow.keras.optimizers import Adam
 import random
 from datetime import datetime
 from keras.layers import Conv1D, ReLU, MaxPooling1D, Flatten
+from ModelClass import *
 
 
-
-train = False
-analyze_flag = True
+train = True
+analyze_flag = True 
 test_flag = False 
 # =======RNN config
 normalize_flag= False
@@ -187,18 +187,7 @@ def create_LSTM_model():
     model.compile(optimizer=custom_optimizer, loss='mean_absolute_percentage_error', metrics=['mape', 'mae', 'mse'])
     return model
 
-def create_CNN_model(hidden_size,num_classes):
-    model = Sequential()
-    model.add(Conv1D(64, 3, padding='same', input_shape=(hidden_size,)))
-    model.add(ReLU())
-    model.add(MaxPooling1D(2, 2))
-    model.add(Conv1D(128, 3, padding='same'))
-    model.add(ReLU())
-    model.add(MaxPooling1D(2, 2))
-    model.add(Flatten())
-    model.add(Dense(256, activation='relu'))
-    model.add(Dense(num_classes, activation='linear'))
-    return model
+
 
 def read_DB(db_path):
     # Load the data
@@ -231,15 +220,16 @@ def read_DB(db_path):
 DB_file = "data/DB/train_DB.csv"
 test_file = "data/DB/test_DB.csv"
 root = 'data/Test/Test_LSTM/'
+model_file = 'data/Test/Test_LSTM/temperature_prediction_model.hdf5'
 
-if normalize_flag:
-    hyper_params_name = 'data/RNN_models/withNormalization/hyper_parameters'
-    model_file = 'data/RNN_models/withNormalization/temperature_prediction_model.hdf5'
-    best_result_path = 'data/RNN_models/withNormalization/best_trained_data'
-else:
-    hyper_params_name = 'data/RNN_models/without_Normalization/hyper_parameters'
-    model_file = 'data/RNN_models/without_Normalization/temperature_prediction_model.hdf5'
-    best_result_path = 'data/RNN_models/without_Normalization/best_trained_data'
+# if normalize_flag:
+#     hyper_params_name = 'data/RNN_models/withNormalization/hyper_parameters'
+#     model_file = 'data/RNN_models/withNormalization/temperature_prediction_model.hdf5'
+#     best_result_path = 'data/RNN_models/withNormalization/best_trained_data'
+# else:
+#     hyper_params_name = 'data/RNN_models/without_Normalization/hyper_parameters'
+#     model_file = 'data/RNN_models/without_Normalization/temperature_prediction_model.hdf5'
+#     best_result_path = 'data/RNN_models/without_Normalization/best_trained_data'
         
 
 
@@ -251,51 +241,54 @@ if train:
     # Load the data
     x,y,_,_ = read_DB(DB_file)
     
-    # Split data into training and testing sets
-    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=23)
-    # Build the model
-    model = create_LSTM_model()
-    # model.summary()
-    checkpointer = ModelCheckpoint(filepath = model_file, verbose = 2, save_best_only = True)
-    early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
-    # Train the model       
-    history = model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, validation_split=validation_split,callbacks = [checkpointer,early_stopping])
-    
-    # Visualize the training loss
-    plt.plot(history.history['loss'], label='Training Loss')
-    plt.plot(history.history['val_loss'], label='Validation Loss')
-    plt.xlabel('Epochs')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.show()
-    
-    # Visualize the training loss
-    plt.plot(history.history['mse'], label='Training MSE')
-    plt.plot(history.history['val_mse'], label='Validation MSE')
-    plt.xlabel('Epochs')
-    plt.ylabel('MSE')
-    plt.legend()
-    plt.show()
-    
-    # Visualize the training loss
-    plt.plot(history.history['mae'], label='Training MAE')
-    plt.plot(history.history['val_mae'], label='Validation MAE')
-    plt.xlabel('Epochs')
-    plt.ylabel('MAE')
-    plt.legend()
-    plt.show()
-    
-    plt.plot(history.history['mape'], label='Training MAPE')
-    plt.plot(history.history['val_mape'], label='Validation MAPE')
-    plt.xlabel('Epochs')
-    plt.ylabel('MAPE')
-    plt.legend()
-    plt.show()
-    
-    # Evaluate the model on the test set
-    test_results = model.evaluate(x_test, y_test)
-    print('--------------Test results:-----------------')
-    print(test_results)
+    for i in range(1):
+        # Split data into training and testing sets
+        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=23)
+        
+        
+        # Build the model
+        model = create_LSTM_model()
+        # model.summary()
+        checkpointer = ModelCheckpoint(filepath = model_file, verbose = 2, save_best_only = True)
+        early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
+        # Train the model       
+        history = model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, validation_split=validation_split,callbacks = [checkpointer,early_stopping])
+        
+        # Visualize the training loss
+        plt.plot(history.history['loss'], label='Training Loss')
+        plt.plot(history.history['val_loss'], label='Validation Loss')
+        plt.xlabel('Epochs')
+        plt.ylabel('Loss')
+        plt.legend()
+        plt.show()
+        
+        # Visualize the training loss
+        plt.plot(history.history['mse'], label='Training MSE')
+        plt.plot(history.history['val_mse'], label='Validation MSE')
+        plt.xlabel('Epochs')
+        plt.ylabel('MSE')
+        plt.legend()
+        plt.show()
+        
+        # Visualize the training loss
+        plt.plot(history.history['mae'], label='Training MAE')
+        plt.plot(history.history['val_mae'], label='Validation MAE')
+        plt.xlabel('Epochs')
+        plt.ylabel('MAE')
+        plt.legend()
+        plt.show()
+        
+        plt.plot(history.history['mape'], label='Training MAPE')
+        plt.plot(history.history['val_mape'], label='Validation MAPE')
+        plt.xlabel('Epochs')
+        plt.ylabel('MAPE')
+        plt.legend()
+        plt.show()
+        
+        # Evaluate the model on the test set
+        test_results = model.evaluate(x_test, y_test)
+        print('--------------Test results:-----------------')
+        print(test_results)
 
     
     
@@ -304,28 +297,28 @@ if train:
    
                 
                 
-    with open(root+'x_test', 'wb') as fout:
-        pickle.dump(x_test, fout)
-    fout.close()
-    
-    with open(root+'y_test', 'wb') as fout:
-        pickle.dump(y_test, fout)
-    fout.close()
+        with open(root+'x_test', 'wb') as fout:
+            pickle.dump(x_test, fout)
+        fout.close()
+        
+        with open(root+'y_test', 'wb') as fout:
+            pickle.dump(y_test, fout)
+        fout.close()
+        
+        x_test,y_test,original_x,original_y = read_DB(test_file)
+        test_results = model.evaluate(x_test, y_test)
+        print('--------------Test results:-----------------')
+        print(test_results)
+        
+        with open(root+'outputResultFor5runs.txt', 'a') as file:
+            # Iterate over the list and write each item to the file
+            for item in test_results:
+                file.write(str(item)+'__')
+            file.write('\n')
     
 
     
-    # # Make predictions and denormalize
-    # y_pred = model.predict(x_test)
-    # print("Prediction, real value")
-    # initial_x_test=np.array([]).reshape(0, x_test.shape[2]) 
-    # prediction_values=[]
-    # actual_values=[]
-    # result=list()
-    # for i in range(len(y_pred)):
-    #    temp=(x_test[i][timesteps-1].reshape(-1, 1)).T
-    #    initial_x_test = np.vstack([initial_x_test, np.array(temp[0])])
-  
-    #    if normalize_flag:
+
 
 elif test_flag:
     

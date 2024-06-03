@@ -1,28 +1,21 @@
 import tensorflow as tf
+from tensorflow.keras.models import Model, load_model
+from tensorflow.keras.layers import LSTM, Dense, Dropout, Bidirectional, Conv1D, ReLU, Input, Reshape, BatchNormalization, MaxPooling1D
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
+from tensorflow.keras.optimizers import Adam, Adadelta
+from tensorflow.keras.regularizers import l2
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
-from tensorflow.keras.models import Sequential, Model
-from tensorflow.keras.layers import LSTM, Dense, Dropout
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from tensorflow.keras.models import load_model
 import pickle
-from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
-from tensorflow.keras.layers import Bidirectional
-from tensorflow.keras.optimizers import Adam
-import random
 from datetime import datetime
-from keras.layers import Conv1D, ReLU, MaxPooling1D, Flatten, Input, TimeDistributed,Reshape
-from CNN_Class import *
-import torch
-from torch.utils.data import DataLoader
-from tensorflow.keras.losses import SparseCategoricalCrossentropy
+from ModelClass import *
 
 
-
-train = False
-analyze_flag = True
+train = True
+analyze_flag = False
 test_flag = False 
 # =======RNN config
 normalize_flag= False
@@ -42,23 +35,25 @@ data_header = [
     'hour', 'complete_timestamp(YYYY_M_DD_HH_M)', 'temp_centr', 'temp_to_estimate'
 ]
 
-def create_cnn_lstm_model():
+def create_cnn_lstm_model(dropout_rate=0.2, l2_rate=0.00001):
     # Input layer
-    input_layer = Input(shape=(timesteps, 10))
+    input_layer = Input(shape=(timesteps, len(data_header)-1))
     # First Conv1D + ReLU
-    conv1 = Conv1D(filters=64, kernel_size=3, strides=1, padding='same')(input_layer)
+    conv1 = Conv1D(filters=64, kernel_size=3, strides=1, padding='same', kernel_regularizer=l2(l2_rate))(input_layer)
     relu1 = ReLU()(conv1)
+    # maxpool1 = MaxPooling1D(pool_size=2, strides=2)(relu1)
     
     # Second Conv1D + ReLU
-    conv2 = Conv1D(filters=128, kernel_size=3, strides=1, padding='same')(relu1)
-    relu2 = ReLU()(conv2)
+    # conv2 = Conv1D(filters=512, kernel_size=3, strides=1, padding='same')(relu1)
+    # relu2 = ReLU()(conv2)
     
     # Third Conv1D + ReLU (output channels match input channels)
-    conv3 = Conv1D(filters=10, kernel_size=3, strides=1, padding='same')(relu2)
+    conv3 = Conv1D(filters=len(data_header)-1, kernel_size=3, strides=1, padding='same')(relu1)
     relu3 = ReLU()(conv3)
     
+    # reshape = Reshape((timesteps // 2, 10))(relu3)  # Adjust timesteps // 2 based on pooling
     # flatten = TimeDistributed(Flatten())(relu3)
-    reshape = Reshape((10,3))(relu3)
+    reshape = Reshape((len(data_header)-1,timesteps))(relu3)
     # Define the LSTM layers using the functional API
     lstm1 = Bidirectional(LSTM(units=256, return_sequences=True))(reshape)
     dropout1 = Dropout(dropout)(lstm1)
@@ -67,8 +62,9 @@ def create_cnn_lstm_model():
     lstm3 = Bidirectional(LSTM(units=64, return_sequences=False))(dropout2)
     dropout3 = Dropout(dropout)(lstm3)
     
+    
     # Output layer
-    output = Dense(units=1)(dropout3)
+    output = Dense(units=1, kernel_regularizer=l2(l2_rate))(dropout3)
     
     # Create the model
     model = Model(inputs=input_layer, outputs=output)
@@ -76,7 +72,44 @@ def create_cnn_lstm_model():
     # Print the model summary to check the shapes
     model.summary()
     return model
+def create_cnn_lstm_model_withpool(dropout_rate=0.2, l2_rate=0.00001):
+    # Input layer
+    input_layer = Input(shape=(timesteps, len(data_header)-1))
+    # First Conv1D + ReLU
+    conv1 = Conv1D(filters=64, kernel_size=3, strides=1, padding='same', kernel_regularizer=l2(l2_rate))(input_layer)
+    relu1 = ReLU()(conv1)
+    maxpool1 = MaxPooling1D(pool_size=2, strides=2)(relu1)
     
+    # Second Conv1D + ReLU
+    # conv2 = Conv1D(filters=512, kernel_size=3, strides=1, padding='same')(relu1)
+    # relu2 = ReLU()(conv2)
+    
+    # Third Conv1D + ReLU (output channels match input channels)
+    conv3 = Conv1D(filters=len(data_header)-1, kernel_size=3, strides=1, padding='same')(maxpool1)
+    relu3 = ReLU()(conv3)
+    
+    reshape = Reshape((timesteps // 2, len(data_header)-1))(relu3)  # Adjust timesteps // 2 based on pooling
+    # flatten = TimeDistributed(Flatten())(relu3)
+    # reshape = Reshape((10,3))(relu3)
+    # Define the LSTM layers using the functional API
+    lstm1 = LSTM(units=256, return_sequences=True)(reshape)
+    dropout1 = Dropout(dropout)(lstm1)
+    lstm2 = LSTM(units=128, return_sequences=True)(dropout1)
+    dropout2 = Dropout(dropout)(lstm2)
+    lstm3 = LSTM(units=64, return_sequences=False)(dropout2)
+    dropout3 = Dropout(dropout)(lstm3)
+    
+    
+    # Output layer
+    output = Dense(units=1, kernel_regularizer=l2(l2_rate))(dropout3)
+    
+    # Create the model
+    model = Model(inputs=input_layer, outputs=output)
+    
+    # Print the model summary to check the shapes
+    model.summary()
+    return model   
+
 def localize_row(df_base,state,time_stamp):
     row = df_base[df_base['complete_timestamp(YYYY_M_DD_HH_M)']== 	time_stamp]   
     new_column_header = 'sensor'
@@ -246,15 +279,16 @@ def read_DB(db_path):
 DB_file = "data/DB/train_DB.csv"
 test_file = "data/DB/test_DB.csv"
 root = 'data/Test/Test_CNN_FollowedBy_LSTM/'
+model_file = 'data/Test/Test_CNN_FollowedBy_LSTM/temperature_prediction_model.hdf5'
 
-if normalize_flag:
-    hyper_params_name = 'data/RNN_models/withNormalization/hyper_parameters'
-    model_file = 'data/RNN_models/withNormalization/temperature_prediction_model.hdf5'
-    best_result_path = 'data/RNN_models/withNormalization/best_trained_data'
-else:
-    hyper_params_name = 'data/RNN_models/without_Normalization/hyper_parameters'
-    model_file = 'data/RNN_models/without_Normalization/temperature_prediction_model.hdf5'
-    best_result_path = 'data/RNN_models/without_Normalization/best_trained_data'
+# if normalize_flag:
+#     hyper_params_name = 'data/RNN_models/withNormalization/hyper_parameters'
+#     model_file = 'data/RNN_models/withNormalization/temperature_prediction_model.hdf5'
+#     best_result_path = 'data/RNN_models/withNormalization/best_trained_data'
+# else:
+#     hyper_params_name = 'data/RNN_models/without_Normalization/hyper_parameters'
+#     model_file = 'data/RNN_models/without_Normalization/temperature_prediction_model.hdf5'
+#     best_result_path = 'data/RNN_models/without_Normalization/best_trained_data'
         
 
 
@@ -266,80 +300,98 @@ if train:
     # Load the data
     x,y,_,_ = read_DB(DB_file)
     
-    # Split data into training and testing sets
-    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=23)
-    
-    
-    model = create_cnn_lstm_model()
-    custom_optimizer = Adam(learning_rate=learning_rate)
-    model.compile(optimizer=custom_optimizer, loss='mean_absolute_percentage_error', metrics=['mape', 'mae', 'mse'])
-    
-    checkpointer = ModelCheckpoint(filepath = model_file, verbose = 2, save_best_only = True)
-    early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
-    # Train the model       
-    history = model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, validation_split=validation_split,callbacks = [checkpointer,early_stopping])
-    
-    # Visualize the training loss
-    plt.plot(history.history['loss'], label='Training Loss')
-    plt.plot(history.history['val_loss'], label='Validation Loss')
-    plt.xlabel('Epochs')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.show()
-    
-    # Visualize the training loss
-    plt.plot(history.history['mse'], label='Training MSE')
-    plt.plot(history.history['val_mse'], label='Validation MSE')
-    plt.xlabel('Epochs')
-    plt.ylabel('MSE')
-    plt.legend()
-    plt.show()
-    
-    # Visualize the training loss
-    plt.plot(history.history['mae'], label='Training MAE')
-    plt.plot(history.history['val_mae'], label='Validation MAE')
-    plt.xlabel('Epochs')
-    plt.ylabel('MAE')
-    plt.legend()
-    plt.show()
-    
-    plt.plot(history.history['mape'], label='Training MAPE')
-    plt.plot(history.history['val_mape'], label='Validation MAPE')
-    plt.xlabel('Epochs')
-    plt.ylabel('MAPE')
-    plt.legend()
-    plt.show()
-    
-    # Evaluate the model on the test set
-    test_results = model.evaluate(x_test, y_test)
-    print('--------------Test results:-----------------')
-    print(test_results)
+    with open(root+'outputResultFor5runs.txt', 'a') as file:
+        # Iterate over the list and write each item to the file
+        file.write('without Bidirectional')
+        file.write('\n')
 
-   
-                
-                
-    with open(root+'x_test', 'wb') as fout:
-        pickle.dump(x_test, fout)
-    fout.close()
+    for i in range(5):
+        # Split data into training and testing sets
+        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=23)
+        
+        
+        model = create_cnn_lstm_model()
+        custom_optimizer = Adam(learning_rate=learning_rate)
+        
+        model.compile(optimizer=custom_optimizer, loss='mean_absolute_percentage_error', metrics=['mape', 'mae', 'mse'])
+        
+        
+        checkpointer = ModelCheckpoint(filepath = model_file, verbose = 2, save_best_only = True)
+        early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
+        # Train the model       
+        history = model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, validation_split=validation_split,callbacks = [checkpointer,early_stopping])
+        
+        
+        # Compile the model
+        # model.compile(optimizer='adam', loss='mean_absolute_percentage_error', metrics=['mape', 'mae', 'mse','mean_absolute_percentage_error'])
+        
+        # Define callbacks
+        # early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
+        # reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=patience, min_lr=1e-6)
+        
+        # # Train the model
+        # history = model.fit(x_train, y_train, validation_split=0.2, epochs=400, batch_size=32, callbacks=[early_stopping,checkpointer])
     
-    with open(root+'y_test', 'wb') as fout:
-        pickle.dump(y_test, fout)
-    fout.close()
     
+        # Visualize the training loss
+        plt.plot(history.history['loss'], label='Training Loss')
+        plt.plot(history.history['val_loss'], label='Validation Loss')
+        plt.xlabel('Epochs')
+        plt.ylabel('Loss')
+        plt.legend()
+        plt.show()
+        
+        # Visualize the training loss
+        plt.plot(history.history['mse'], label='Training MSE')
+        plt.plot(history.history['val_mse'], label='Validation MSE')
+        plt.xlabel('Epochs')
+        plt.ylabel('MSE')
+        plt.legend()
+        plt.show()
+        
+        # Visualize the training loss
+        plt.plot(history.history['mae'], label='Training MAE')
+        plt.plot(history.history['val_mae'], label='Validation MAE')
+        plt.xlabel('Epochs')
+        plt.ylabel('MAE')
+        plt.legend()
+        plt.show()
+        
+        plt.plot(history.history['mape'], label='Training MAPE')
+        plt.plot(history.history['val_mape'], label='Validation MAPE')
+        plt.xlabel('Epochs')
+        plt.ylabel('MAPE')
+        plt.legend()
+        plt.show()
+        
+        # Evaluate the model on the test set
+        test_results = model.evaluate(x_test, y_test)
+        print('--------------Train results:-----------------')
+        print(test_results)
+    
+       
+                    
+                    
+        with open(root+'x_test', 'wb') as fout:
+            pickle.dump(x_test, fout)
+        fout.close()
+        
+        with open(root+'y_test', 'wb') as fout:
+            pickle.dump(y_test, fout)
+        fout.close()
+        
+        x_test,y_test,original_x,original_y = read_DB(test_file)
+        test_results = model.evaluate(x_test, y_test)
+        print('--------------Test results:-----------------')
+        print(test_results)
+        
+        with open(root+'outputResultFor5runs.txt', 'a') as file:
+            # Iterate over the list and write each item to the file
+            for item in test_results:
+                file.write(str(item)+'__')
+            file.write('\n')
 
-    
-    # # Make predictions and denormalize
-    # y_pred = model.predict(x_test)
-    # print("Prediction, real value")
-    # initial_x_test=np.array([]).reshape(0, x_test.shape[2]) 
-    # prediction_values=[]
-    # actual_values=[]
-    # result=list()
-    # for i in range(len(y_pred)):
-    #    temp=(x_test[i][timesteps-1].reshape(-1, 1)).T
-    #    initial_x_test = np.vstack([initial_x_test, np.array(temp[0])])
-  
-    #    if normalize_flag:
+
 
 elif test_flag:
     
