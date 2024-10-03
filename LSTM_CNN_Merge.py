@@ -31,11 +31,21 @@ learning_rate= 0.0001
 with_out_process_time=False    
     
 # Data preprocessing
-data_header = [
-    'sensor', 
-    'year', 'month', 'week', 'day_of_year', 'day_of_month', 'day_of_week',
-    'hour', 'complete_timestamp(YYYY_M_DD_HH_M)', 'temp_centr', 'temp_to_estimate'
-]
+# data_header = [
+#     'sensor', 
+#     'year', 'month', 'week', 'day_of_year', 'day_of_month', 'day_of_week',
+#     'hour', 'complete_timestamp(YYYY_M_DD_HH_M)', 'temp_centr', 'temp_to_estimate'
+# ]
+
+data_header = ['sensor','dist_to_central_station', 'year',
+       'month', 'week', 'day_of_year', 'day_of_month', 'day_of_week', 'hour',
+       'complete_timestamp(YYYY_M_DD_HH_M)', 'barometer_hpa', 'temp_centr',
+       'hightemp_centr', 'lowtemp_centr', 'hum', 'dewpoint__c', 'wetbulb_c',
+       'windspeed_km_h', 'windrun_km', 'highwindspeed_km_h', 'windchill_c',
+       'heatindex_c', 'thwindex_c', 'thswindex_c', 'rain_mm', 'rain_rate_mm_h',
+       'solar_rad_w_m_2', 'solar_energy_ly', 'high_solar_rad_w_m_2', 'ET_Mm',
+       'heating_degree_days', 'cooling_degree_days', 'humidity_rh',
+       'solar_klux', 'temp_to_estimate']
 
 def localize_row(df_base,state,time_stamp):
     row = df_base[df_base['complete_timestamp(YYYY_M_DD_HH_M)']== 	time_stamp]   

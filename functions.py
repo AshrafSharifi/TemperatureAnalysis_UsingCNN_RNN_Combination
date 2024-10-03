@@ -276,7 +276,33 @@ class functions(object):
             if idx > 0:
                 df.at[idx, 'temp_to_estimate'] = df.at[idx - 1, 'temp_to_estimate']
         
-        return df       
+        return df  
+    
+
+      
+  def analyze_temp_diff(self):
+      
+      sensorsdata = self.get_all_data()
+      climatic_data = dict()
+      for sensor in range(1,8):
+          temp_data =  sensorsdata["sensor"+str(sensor)]
+          temp_data = [value for value in temp_data.values()][0]
+          first_element = next(iter(temp_data.items()))
+          climatic_data[sensor] = first_element[1]['sensorData']
+          
+    # Assuming climatic_data is your dictionary with dataframes for each POI
+    # Step 1: Align dataframes by timestamp
+      merged_data = pd.concat([df.set_index('complete_timestamp(YYYY_M_DD_HH_M)')['temp_to_estimate'] for df in climatic_data.values()], axis=1)
+      merged_data.columns = [f'POI_{i}' for i in climatic_data.keys()]
+        
+        # Step 2: Calculate pairwise differences
+      temp_diff = merged_data.apply(lambda row: row.max() - row.min(), axis=1)
+        
+        # Step 3: Compute the average of the differences
+      average_temp_diff = temp_diff.mean()
+        
+      print(f"The average temperature difference between POIs is: {average_temp_diff:.2f}°C")
+          
       
 
 
